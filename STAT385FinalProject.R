@@ -205,4 +205,93 @@ test_error
 #accuracy
 accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
 accuracy
+
 #0.9468085
+
+### LASSO MODEL ###
+
+library("glmnet")
+
+#convert data to matrix format for glmnet
+xmat_train <- as.matrix(train.set[, !names(train.set) %in% c("Sleep.Disorder")])
+y_train <- as.numeric(train.set$Sleep.Disorder)  # Convert factor to numeric (1,2,3)
+
+xmat_test <- as.matrix(test.set[, !names(test.set) %in% c("Sleep.Disorder")])
+y_test <- as.numeric(test.set$Sleep.Disorder)
+
+#cv for lambda
+
+set.seed(20251114) #seed for reproducibility
+
+cvfit <- cv.glmnet(xmat_train, y_train, 
+                   family = "multinomial",  # For 3-class classification
+                   alpha = 1,               # alpha=1 for LASSO penalty
+                   nfolds = 10)
+
+
+lambest_min <- cvfit$lambda.min     # Lambda with minimum CV error
+lambest_1se <- cvfit$lambda.1se 
+
+#Best lambda (minimum CV error): 0.00573 
+#Lambda: 0.03681 
+
+# Plot cross-validation results
+plot(cvfit, main = "LASSO: Cross-Validation Error vs Lambda")
+
+#fit final model with best lambda
+
+lasso_model <- glmnet(xmat_train, y_train,
+                      family = "multinomial",
+                      alpha = 1,
+                      lambda = lambest_min)
+
+# Extract coefficients
+lasso_coef <- coef(lasso_model)
+
+# Show coefficients for each class
+class_names <- levels(train.set$Sleep.Disorder)
+for(i in 1:length(lasso_coef)) {
+  cat("\nClass:", class_names[i], "\n")
+  
+  # Get coefficients for this class
+  coef_class <- as.matrix(lasso_coef[[i]])
+  non_zero <- which(coef_class != 0)
+  
+  if(length(non_zero) > 1) {  # More than just intercept
+    for(j in non_zero) {
+      if(rownames(coef_class)[j] != "(Intercept)") {
+        cat(sprintf("%-20s: %8.4f\n", rownames(coef_class)[j], coef_class[j]))
+      }
+    }
+  } else {
+    cat("(All feature coefficients shrunk to zero)\n")
+  }
+}
+
+# Get class predictions
+lasso_pred <- predict(lasso_model, 
+                      newx = xmat_test,
+                      type = "class",
+                      s = lambest_min)
+
+#convert back to factor with og labels
+lasso_pred_factor <- factor(lasso_pred, 
+                            levels = 1:3,
+                            labels = class_names)
+
+# Confusion matrix
+conf_matrix <- table(Predicted = lasso_pred_factor, 
+                     Actual = test.set$Sleep.Disorder)
+
+print(conf_matrix)
+
+# Actual
+# Predicted     Insomnia None Sleep Apnea
+# Insomnia          16    1           2
+# None               3   49           2
+# Sleep Apnea        1    0          20
+
+# Calculate error rate
+lasso_error <- 1 - sum(diag(conf_matrix)) / sum(conf_matrix)
+#LASSO Test Error Rate: 0.0957 
+#LASSO Test Accuracy: 0.9043 
