@@ -110,7 +110,8 @@ test.set <- model_data[-inTrain, ]
 nrow(train.set) #280
 nrow(test.set) #94
 
-#Model:
+
+### Random Forest Model ###
 library(randomForest)
 
 #set variable to use for models with diff mtry vals
@@ -208,6 +209,7 @@ accuracy
 
 #0.9468085
 
+
 ### LASSO MODEL ###
 
 library("glmnet")
@@ -295,3 +297,45 @@ print(conf_matrix)
 lasso_error <- 1 - sum(diag(conf_matrix)) / sum(conf_matrix)
 #LASSO Test Error Rate: 0.0957 
 #LASSO Test Accuracy: 0.9043 
+
+
+### LOGISTIC REGRESSION MODEL ###
+
+library(nnet)
+set.seed(20251114)
+
+train_mm <- model.matrix(Sleep.Disorder ~ ., data = train.set)
+test_mm  <- model.matrix(Sleep.Disorder ~ ., data = test.set)
+
+# Convert to data frames
+train_df <- as.data.frame(train_mm)
+test_df  <- as.data.frame(test_mm)
+
+# Add back response as factor
+train_df$Sleep.Disorder <- train.set$Sleep.Disorder
+test_df$Sleep.Disorder  <- test.set$Sleep.Disorder
+
+# Fit multinomial logistic regression
+logit_model <- multinom(Sleep.Disorder ~ . , data = train_df)
+
+# Predict classes
+logit_pred <- predict(logit_model, newdata = test_df)
+
+# Confusion matrix
+logit_conf_matrix <- table(Predicted = logit_pred, Actual = test_df$Sleep.Disorder)
+print(logit_conf_matrix)
+
+#Actual
+#Predicted     Insomnia None Sleep Apnea
+#Insomnia          17    1           0
+#None               3   48           2
+#Sleep Apnea        0    1          22
+
+# Accuracy & Error
+logit_accuracy <- sum(diag(logit_conf_matrix)) / sum(logit_conf_matrix)
+logit_error <- 1 - logit_accuracy
+
+logit_accuracy
+logit_error
+#Logistic Regression accuracy: 0.9255319
+#Logistic Regression error: 0.07446809
