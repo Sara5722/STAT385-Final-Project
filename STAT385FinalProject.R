@@ -209,6 +209,295 @@ accuracy
 
 #0.9468085
 
+### GRADIENT BOOSTING MODEL (GBM) ###
+
+library(gbm)
+
+# Fit GBM model 
+gbm_fit <- gbm(
+  Sleep.Disorder ~ .,
+  distribution      = "multinomial",
+  data              = train.set,
+  n.trees           = 3000,
+  interaction.depth = 3,
+  n.minobsinnode    = 10,
+  shrinkage         = 0.01,
+  bag.fraction      = 0.8,
+  train.fraction    = 1,
+  cv.folds          = 5,
+  verbose           = FALSE
+)
+
+
+#  Choose optimal number of trees using cross-validation 
+best_iter <- gbm.perf(gbm_fit, method = "cv")   # also plots CV deviance vs trees
+cat("Optimal number of trees (best_iter):", best_iter, "\n")
+# Optimal number of trees (best_iter): 173 
+
+#  Predictions on test set 
+gbm_prob <- predict(
+  gbm_fit,
+  newdata = test.set,
+  n.trees = best_iter,
+  type    = "response"     # class probabilities
+)
+
+# gbm_prob can be (n x K) or (n x K x 1); handle both cases
+if (length(dim(gbm_prob)) == 3) {
+  prob_mat <- gbm_prob[, , 1]
+} else {
+  prob_mat <- gbm_prob
+}
+
+# Convert probabilities to predicted class (index of max probability in each row)
+pred_index   <- max.col(prob_mat)
+class_levels <- levels(train.set$Sleep.Disorder)
+
+gbm_pred <- factor(
+  class_levels[pred_index],
+  levels = class_levels
+)
+
+#  Confusion matrix, error rate, and accuracy 
+gbm_conf_matrix <- table(
+  Predicted = gbm_pred,
+  Actual    = test.set$Sleep.Disorder
+)
+gbm_conf_matrix
+# Confusion matrix (test set):
+#             Actual
+# Predicted    Insomnia None Sleep Apnea
+#   Insomnia         16    0           1
+#   None              3   50           2
+#   Sleep Apnea       1    0          21
+
+gbm_error <- 1 - sum(diag(gbm_conf_matrix)) / sum(gbm_conf_matrix)
+cat("Gradient Boosting Test Error Rate:", round(gbm_error, 4), "\n")
+# Gradient Boosting Test Error Rate: 0.0745 
+
+gbm_accuracy <- sum(diag(gbm_conf_matrix)) / sum(gbm_conf_matrix)
+cat("Gradient Boosting Test Accuracy:", round(gbm_accuracy, 4), "\n")
+# Gradient Boosting Test Accuracy: 0.9255 
+
+#  Variable importance (relative influence) 
+cat("\nRelative Influence of Predictors (Gradient Boosting):\n")
+gbm_importance <- summary(gbm_fit)   # prints table and plots importance
+
+#  Partial dependence plot for a key variable (example: Stress.Level) 
+plot(
+  gbm_fit,
+  i.var = "Stress.Level",
+  main = "Partial Dependence: Stress Level"
+)
+
+
+### SVM Model (Linear Kernel) ###
+
+
+library(e1071)
+
+## Making outcome a factor
+train.set$Sleep.Disorder <- as.factor(train.set$Sleep.Disorder)
+test.set$Sleep.Disorder  <- as.factor(test.set$Sleep.Disorder)
+
+set.seed(20251114)  # same seed as other models for reproducibility
+
+## 1. Fit a baseline linear SVM 
+
+
+# Baseline cost (penalty for misclassification)
+svm_lin1 <- svm(
+  Sleep.Disorder ~ .,
+  data   = train.set,
+  kernel = "linear",
+  cost   = 1,
+  scale  = TRUE   # scale numeric predictors
+)
+
+print(svm_lin1)
+# Call:
+#   svm(formula = Sleep.Disorder ~ ., data = train.set, kernel = "linear", cost = 1, scale = TRUE)
+#
+# Parameters:
+#   SVM-Type:  C-classification 
+#   SVM-Kernel:  linear 
+#   cost:  1 
+#
+# Number of Support Vectors:  77
+
+# Number of support vectors
+svm_lin1$tot.nSV
+# [1] 77
+
+svm_lin1$nSV  # per class
+# [1] 24 29 24
+
+# Predictions on test set
+svm_lin1_pred <- predict(svm_lin1, newdata = test.set)
+
+# Confusion matrix
+svm_lin1_conf <- table(
+  Predicted = svm_lin1_pred,
+  Actual    = test.set$Sleep.Disorder
+)
+svm_lin1_conf
+# Actual
+# Predicted     Insomnia None Sleep Apnea
+# Insomnia          17    0           0
+# None               3   49           2
+# Sleep Apnea        0    1          22
+
+# Error rate and accuracy
+svm_lin1_error <- 1 - sum(diag(svm_lin1_conf)) / sum(svm_lin1_conf)
+svm_lin1_acc   <- sum(diag(svm_lin1_conf)) / sum(svm_lin1_conf)
+
+cat("Baseline Linear SVM (cost = 1) - Accuracy:", round(svm_lin1_acc, 4),
+    " Error:", round(svm_lin1_error, 4), "\n")
+# Baseline Linear SVM (cost = 1) - Accuracy: 0.9362  Error: 0.0638 
+
+
+## 2. Increase cost parameter 
+
+
+# Larger cost = more penalty on misclassification, harder margin
+svm_lin2 <- svm(
+  Sleep.Disorder ~ .,
+  data   = train.set,
+  kernel = "linear",
+  cost   = 10,
+  scale  = TRUE
+)
+
+print(svm_lin2)
+# Call:
+#   svm(formula = Sleep.Disorder ~ ., data = train.set, kernel = "linear", cost = 10, scale = TRUE)
+#
+# Parameters:
+#   SVM-Type:  C-classification 
+#   SVM-Kernel:  linear 
+#   cost:  10 
+#
+# Number of Support Vectors:  77
+
+svm_lin2$tot.nSV
+# [1] 77
+
+svm_lin2$nSV
+# [1] 30 22 25
+
+# Predictions
+svm_lin2_pred <- predict(svm_lin2, newdata = test.set)
+
+# Confusion matrix
+svm_lin2_conf <- table(
+  Predicted = svm_lin2_pred,
+  Actual    = test.set$Sleep.Disorder
+)
+svm_lin2_conf
+# Actual
+# Predicted     Insomnia None Sleep Apnea
+# Insomnia          17    2           0
+# None               3   46           2
+# Sleep Apnea        0    2          22
+
+# Error rate and accuracy
+svm_lin2_error <- 1 - sum(diag(svm_lin2_conf)) / sum(svm_lin2_conf)
+svm_lin2_acc   <- sum(diag(svm_lin2_conf)) / sum(svm_lin2_conf)
+
+cat("Linear SVM (cost = 10) - Accuracy:", round(svm_lin2_acc, 4),
+    " Error:", round(svm_lin2_error, 4), "\n")
+# Linear SVM (cost = 10) - Accuracy: 0.9043  Error: 0.0957 
+
+
+## 3. Choose cost with cross-validation 
+
+
+set.seed(20251114)
+
+tune_lin <- tune.svm(
+  Sleep.Disorder ~ .,
+  data   = train.set,
+  kernel = "linear",
+  cost   = c(0.1, 0.5, 1, 5, 10, 20, 50)
+)
+
+summary(tune_lin)
+# Parameter tuning of ‘svm’:
+# 
+# - sampling method: 10-fold cross validation 
+# 
+# - best parameters:
+#   cost
+# 0.5
+# 
+# - best performance: 0.1035714 
+# 
+# - Detailed performance results:
+#   cost     error dispersion
+# 1  0.1 0.1142857 0.05783313
+# 2  0.5 0.1035714 0.06617591
+# 3  1.0 0.1035714 0.06399848
+# 4  5.0 0.1107143 0.07032884
+# 5 10.0 0.1142857 0.07103064
+# 6 20.0 0.1107143 0.06828395
+# 7 50.0 0.1107143 0.06399848
+
+best_lin_svm <- tune_lin$best.model
+best_lin_svm
+# Call:
+#   best.svm(x = Sleep.Disorder ~ ., data = train.set, cost = c(0.1, 0.5, 1, 5, 10, 20, 50), kernel = "linear")
+#
+# Parameters:
+#   SVM-Type:  C-classification 
+#   SVM-Kernel:  linear 
+#   cost:  0.5 
+#
+# Number of Support Vectors:  73
+
+# Predictions using best linear SVM
+svm_best_pred <- predict(best_lin_svm, newdata = test.set)
+
+# Confusion matrix
+svm_best_conf <- table(
+  Predicted = svm_best_pred,
+  Actual    = test.set$Sleep.Disorder
+)
+svm_best_conf
+# Actual
+# Predicted     Insomnia None Sleep Apnea
+# Insomnia          17    0           0
+# None               3   49           2
+# Sleep Apnea        0    1          22
+
+# Error & accuracy
+svm_best_error <- 1 - sum(diag(svm_best_conf)) / sum(svm_best_conf)
+svm_best_acc   <- sum(diag(svm_best_conf)) / sum(svm_best_conf)
+
+cat("Best Linear SVM (tuned cost) - Accuracy:", round(svm_best_acc, 4),
+    " Error:", round(svm_best_error, 4), "\n")
+# Best Linear SVM (tuned cost) - Accuracy: 0.9362  Error: 0.0638 
+
+
+
+## 4. Confusion matrix heatmap 
+
+
+library(ggplot2)
+
+cm_df <- as.data.frame(svm_best_conf)
+colnames(cm_df) <- c("Predicted", "Actual", "Freq")
+
+ggplot(cm_df, aes(x = Actual, y = Predicted, fill = Freq)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  geom_text(aes(label = Freq), color = "white", size = 5) +
+  labs(
+    title = "Linear SVM Confusion Matrix (Heatmap)",
+    x     = "Actual Class",
+    y     = "Predicted Class"
+  )
+
+
 
 ### LASSO MODEL ###
 
@@ -338,4 +627,5 @@ logit_error <- 1 - logit_accuracy
 logit_accuracy
 logit_error
 #Logistic Regression accuracy: 0.9255319
+
 #Logistic Regression error: 0.07446809
