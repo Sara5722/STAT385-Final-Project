@@ -582,8 +582,12 @@ print(conf_matrix)
 # None               3   49           2
 # Sleep Apnea        1    0          20
 
-# Calculate error rate
+# Calculate error and accuracy rates
+lasso_accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+lasso_accuracy
+
 lasso_error <- 1 - sum(diag(conf_matrix)) / sum(conf_matrix)
+lasso_error
 #LASSO Test Error Rate: 0.0957 
 #LASSO Test Accuracy: 0.9043 
 
