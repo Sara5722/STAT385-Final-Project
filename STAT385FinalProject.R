@@ -631,5 +631,4 @@ logit_error <- 1 - logit_accuracy
 logit_accuracy
 logit_error
 #Logistic Regression accuracy: 0.9255319
-
 #Logistic Regression error: 0.07446809

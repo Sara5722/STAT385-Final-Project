@@ -1205,11 +1205,10 @@ class_names &lt;- levels(train.set$Sleep.Disorder)
 for(i in 1:length(lasso_coef)) {
   cat(&quot;\nClass:&quot;, class_names[i], &quot;\n&quot;)
   
-  # Get coefficients for this class
   coef_class &lt;- as.matrix(lasso_coef[[i]])
   non_zero &lt;- which(coef_class != 0)
   
-  if(length(non_zero) &gt; 1) {  # More than just intercept
+  if(length(non_zero) &gt; 1) {
     for(j in non_zero) {
       if(rownames(coef_class)[j] != &quot;(Intercept)&quot;) {
         cat(sprintf(&quot;%-20s: %8.4f\n&quot;, rownames(coef_class)[j], coef_class[j]))
